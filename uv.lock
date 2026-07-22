@@ -1,6 +1,12 @@
 version = 1
 revision = 3
 requires-python = ">=3.10"
+resolution-markers = [
+    "python_full_version >= '3.14' and sys_platform == 'win32'",
+    "python_full_version >= '3.14' and sys_platform != 'win32'",
+    "python_full_version < '3.14' and sys_platform == 'win32'",
+    "python_full_version < '3.14' and sys_platform != 'win32'",
+]
 
 [[package]]
 name = "aiofile"
@@ -808,7 +814,7 @@ wheels = [
 
 [[package]]
 name = "mcp"
-version = "1.26.0"
+version = "1.28.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -826,9 +832,9 @@ dependencies = [
     { name = "typing-inspection" },
     { name = "uvicorn", marker = "sys_platform != 'emscripten'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/fc/6d/62e76bbb8144d6ed86e202b5edd8a4cb631e7c8130f3f4893c3f90262b10/mcp-1.26.0.tar.gz", hash = "sha256:db6e2ef491eecc1a0d93711a76f28dec2e05999f93afd48795da1c1137142c66", size = 608005, upload-time = "2026-01-24T19:40:32.468Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/6e/77/9450b8f251a13affb6281997d0523c4615f8a8b35d0b21ff30db3a5aac9d/mcp-1.28.1.tar.gz", hash = "sha256:d51e36a5f5644faea4f85ea649bfffa6bc6c26770d42798ad6a3de3d2ba69683", size = 638501, upload-time = "2026-06-26T12:57:29.093Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/fd/d9/eaa1f80170d2b7c5ba23f3b59f766f3a0bb41155fbc32a69adfa1adaaef9/mcp-1.26.0-py3-none-any.whl", hash = "sha256:904a21c33c25aa98ddbeb47273033c435e595bbacfdb177f4bd87f6dceebe1ca", size = 233615, upload-time = "2026-01-24T19:40:30.652Z" },
+    { url = "https://files.pythonhosted.org/packages/e2/5e/d118fce19f87a2e7d8101c35c8ae0ec289098a4df0ff244cec23e415aca0/mcp-1.28.1-py3-none-any.whl", hash = "sha256:2726bca5e7193f61c5dde8b12500a6de2d9acf6d1a1c0be9e8c2e706437991df", size = 222620, upload-time = "2026-06-26T12:57:27.218Z" },
 ]
 
 [[package]]
@@ -894,7 +900,7 @@ wheels = [
 
 [[package]]
 name = "plane-mcp-server"
-version = "0.2.9"
+version = "0.2.11"
 source = { editable = "." }
 dependencies = [
     { name = "authlib" },
@@ -919,8 +925,8 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.34.0" },
     { name = "fakeredis", extras = ["lua"], specifier = ">=2.32.1,<2.35.0" },
     { name = "fastmcp", specifier = "==3.2.0" },
-    { name = "mcp", specifier = "==1.26.0" },
-    { name = "plane-sdk", specifier = "==0.2.16" },
+    { name = "mcp", specifier = "==1.28.1" },
+    { name = "plane-sdk", specifier = "==0.2.20" },
     { name = "py-key-value-aio", extras = ["redis"], specifier = ">=0.4.4,<0.5.0" },
     { name = "pyjwt", specifier = ">=2.12.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
@@ -930,15 +936,15 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "plane-sdk"
-version = "0.2.16"
+version = "0.2.20"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/bb/a5/34db34e8286df62d3080dae04546686d23dc196581b574dff6bd94193baf/plane_sdk-0.2.16.tar.gz", hash = "sha256:0cc881880be107fd0e03db8df17766d72828d4a23d2c1aa3975b45040f67f752", size = 64910, upload-time = "2026-06-15T13:39:09.372Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a1/d8/d9465cdf001aac5988cde173af812b298c85afb8550682fad11ba897112f/plane_sdk-0.2.20.tar.gz", hash = "sha256:d4559e00281be200e386bd322e53dbaafd9f1968bd528bb555f6eda2115518b4", size = 86662, upload-time = "2026-07-20T16:57:41.599Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5b/f5/049b5ed3286c4c4d4efbd1562bb254b41453888e0a708ca24cd3246289f2/plane_sdk-0.2.16-py3-none-any.whl", hash = "sha256:3f5aaac8b89248c74c2dbfd9902cb4defcfe5a65c430c9239549ce311fcfd999", size = 103856, upload-time = "2026-06-15T13:39:08.385Z" },
+    { url = "https://files.pythonhosted.org/packages/a7/8b/c2c52c8c632947e1e12c5612be31bd6180bb6c02046bceb66991f44545ab/plane_sdk-0.2.20-py3-none-any.whl", hash = "sha256:b0a55fec3140025761e8a6c3766b2eed9bea4828ae98c45e3df335cffd1df774", size = 123900, upload-time = "2026-07-20T16:57:40.32Z" },
 ]
 
 [[package]]
@@ -1557,8 +1563,8 @@ name = "secretstorage"
 version = "3.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cryptography" },
-    { name = "jeepney" },
+    { name = "cryptography", marker = "sys_platform != 'win32'" },
+    { name = "jeepney", marker = "sys_platform != 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1c/03/e834bcd866f2f8a49a85eaff47340affa3bfa391ee9912a952a1faa68c7b/secretstorage-3.5.0.tar.gz", hash = "sha256:f04b8e4689cbce351744d5537bf6b1329c6fc68f91fa666f60a380edddcd11be", size = 19884, upload-time = "2025-11-23T19:02:53.191Z" }
 wheels = [
