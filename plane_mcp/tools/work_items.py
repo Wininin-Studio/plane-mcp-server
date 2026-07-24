@@ -43,6 +43,26 @@ class _UpdateWorkItemCompat(UpdateWorkItem):
     state_id: str | None = None
 
 
+class _WorkItemDetailCompat(WorkItemDetail):
+    """Accept Plane 1.3.1's expanded parent object as well as a parent UUID."""
+
+    parent: str | dict[str, Any] | None = None
+
+
+def _retrieve_work_item_detail(
+    client: Any,
+    endpoint: str,
+    params: RetrieveQueryParams,
+) -> _WorkItemDetailCompat:
+    """Retrieve a work item without the SDK's overly narrow parent validation."""
+
+    response = client.work_items._get(
+        endpoint,
+        params=params.model_dump(exclude_none=True),
+    )
+    return _WorkItemDetailCompat.model_validate(response)
+
+
 def _dump_results(items: Any, fields: str | None) -> list[Any]:
     """Serialize a page of work items, honoring `fields` as a sparse fieldset."""
     requested = {name.strip() for name in fields.split(",")} - {""} if fields else None
@@ -367,7 +387,7 @@ def register_work_item_tools(mcp: FastMCP) -> None:
         external_id: str | None = None,
         external_source: str | None = None,
         order_by: str | None = None,
-    ) -> WorkItemDetail:
+    ) -> _WorkItemDetailCompat:
         """
         Retrieve a work item by ID.
 
@@ -393,11 +413,10 @@ def register_work_item_tools(mcp: FastMCP) -> None:
             order_by=order_by,
         )
 
-        return client.work_items.retrieve(
-            workspace_slug=workspace_slug,
-            project_id=project_id,
-            work_item_id=work_item_id,
-            params=params,
+        return _retrieve_work_item_detail(
+            client,
+            f"{workspace_slug}/projects/{project_id}/work-items/{work_item_id}",
+            params,
         )
 
     @mcp.tool()
@@ -408,7 +427,7 @@ def register_work_item_tools(mcp: FastMCP) -> None:
         external_id: str | None = None,
         external_source: str | None = None,
         order_by: str | None = None,
-    ) -> WorkItemDetail:
+    ) -> _WorkItemDetailCompat:
         """
         Retrieve a work item by its full identifier (project prefix + sequence number).
 
@@ -453,11 +472,10 @@ def register_work_item_tools(mcp: FastMCP) -> None:
             order_by=order_by,
         )
 
-        return client.work_items.retrieve_by_identifier(
-            workspace_slug=workspace_slug,
-            project_identifier=project_identifier,
-            issue_identifier=int(sequence_str),
-            params=params,
+        return _retrieve_work_item_detail(
+            client,
+            f"{workspace_slug}/work-items/{project_identifier}-{sequence_str}",
+            params,
         )
 
     @mcp.tool()
