@@ -9,6 +9,7 @@ from plane.errors.errors import HttpError
 from plane.models.cycles import (
     CreateCycle,
     Cycle,
+    CycleLite,
     PaginatedArchivedCycleResponse,
     PaginatedCycleLiteResponse,
     PaginatedCycleWorkItemResponse,
@@ -16,10 +17,17 @@ from plane.models.cycles import (
     UpdateCycle,
 )
 from plane.models.enums import CycleStatusEnum
-from plane.models.query_params import CycleLiteListQueryParams, LiteListQueryParams, WorkItemQueryParams
+from plane.models.query_params import (
+    CycleListQueryParams,
+    CycleLiteListQueryParams,
+    LiteListQueryParams,
+    WorkItemQueryParams,
+)
 from pydantic import Field
 
 from plane_mcp.client import get_plane_client_context
+from plane_mcp.compatibility import ensure_pql_supported, mark_legacy_api
+from plane_mcp.lite_fallback import lite_or_fallback
 from plane_mcp.tools.pql_reference import PQL_FIELD_HINT, PQL_FULL_REFERENCE
 
 logger = get_logger(__name__)
@@ -64,7 +72,21 @@ def register_cycle_tools(mcp: FastMCP) -> None:
                 params=params.model_dump(exclude_none=True),
             )
         params = CycleLiteListQueryParams(cursor=cursor, per_page=per_page, order_by=order_by, status=status)
-        return client.cycles.list_lite(workspace_slug=workspace_slug, project_id=project_id, params=params)
+
+        def list_full():
+            mark_legacy_api(client)
+            return client.cycles.list(
+                workspace_slug=workspace_slug,
+                project_id=project_id,
+                params=CycleListQueryParams(cursor=cursor, per_page=per_page, order_by=order_by, status=status),
+            )
+
+        return lite_or_fallback(
+            lambda: client.cycles.list_lite(workspace_slug=workspace_slug, project_id=project_id, params=params),
+            list_full,
+            CycleLite,
+            PaginatedCycleLiteResponse,
+        )
 
     @mcp.tool()
     def create_cycle(
@@ -254,6 +276,11 @@ def register_cycle_tools(mcp: FastMCP) -> None:
             Paginated envelope with results, total_count, next_cursor, prev_cursor.
         """
         client, workspace_slug = get_plane_client_context()
+        if pql:
+            ensure_pql_supported(
+                client,
+                fallback_hint="Omit pql when listing cycle work items.",
+            )
         params = WorkItemQueryParams(
             pql=pql,
             order_by=order_by,

@@ -16,15 +16,51 @@ from plane.models.projects import (
     CreateProject,
     PaginatedProjectLiteResponse,
     PaginatedProjectMemberResponse,
+    PaginatedProjectResponse,
     Project,
     ProjectFeature,
+    ProjectLite,
+    ProjectMember,
     ProjectWorklogSummary,
     UpdateProject,
 )
-from plane.models.query_params import ProjectLiteListQueryParams
-from plane.models.query_params import MemberListQueryParams
+from plane.models.query_params import (
+    MemberListQueryParams,
+    MemberQueryParams,
+    PaginatedQueryParams,
+    ProjectLiteListQueryParams,
+)
 
 from plane_mcp.client import get_plane_client_context
+from plane_mcp.compatibility import mark_legacy_api
+from plane_mcp.lite_fallback import lite_or_fallback
+
+
+def _member_matches(
+    member: ProjectMember,
+    *,
+    first_name: str | None,
+    last_name: str | None,
+    email: str | None,
+    display_name: str | None,
+    role_slug: str | None,
+    is_active: bool | None,
+    is_bot: bool | None,
+) -> bool:
+    """Apply filters that older full-member endpoints may ignore."""
+
+    def contains(value: str | None, expected: str | None) -> bool:
+        return expected is None or expected.casefold() in (value or "").casefold()
+
+    return (
+        contains(member.first_name, first_name)
+        and contains(member.last_name, last_name)
+        and contains(member.email, email)
+        and contains(member.display_name, display_name)
+        and (role_slug is None or member.role_slug == role_slug)
+        and (is_active is None or member.is_active is is_active)
+        and (is_bot is None or member.is_bot is is_bot)
+    )
 
 
 def register_project_tools(mcp: FastMCP) -> None:
@@ -53,11 +89,22 @@ def register_project_tools(mcp: FastMCP) -> None:
         """
         client, workspace_slug = get_plane_client_context()
 
-        params = ProjectLiteListQueryParams(
-            cursor=cursor, per_page=per_page, order_by=order_by, include_archived=False
-        )
+        params = ProjectLiteListQueryParams(cursor=cursor, per_page=per_page, order_by=order_by, include_archived=False)
 
-        return client.projects.list_lite(workspace_slug=workspace_slug, params=params)
+        def list_full() -> PaginatedProjectResponse:
+            mark_legacy_api(client)
+            response = client.projects.list(
+                workspace_slug=workspace_slug,
+                params=PaginatedQueryParams(cursor=cursor, per_page=per_page, order_by=order_by),
+            )
+            return response.model_copy(update={"results": [p for p in response.results if p.archived_at is None]})
+
+        return lite_or_fallback(
+            lambda: client.projects.list_lite(workspace_slug=workspace_slug, params=params),
+            list_full,
+            ProjectLite,
+            PaginatedProjectLiteResponse,
+        )
 
     @mcp.tool()
     def create_project(
@@ -341,8 +388,47 @@ def register_project_tools(mcp: FastMCP) -> None:
             per_page=per_page,
             order_by=order_by,
         )
-        return client.projects.get_members_lite(
-            workspace_slug=workspace_slug, project_id=project_id, params=params
+
+        def get_full_members() -> list[ProjectMember]:
+            mark_legacy_api(client)
+            members = client.projects.get_members(
+                workspace_slug=workspace_slug,
+                project_id=project_id,
+                params=MemberQueryParams(
+                    first_name=first_name,
+                    last_name=last_name,
+                    email=email,
+                    display_name=display_name,
+                    role_slug=role_slug,
+                    is_active=is_active,
+                    is_bot=is_bot,
+                    order_by=order_by,
+                ),
+            )
+            return [
+                member
+                for member in members
+                if _member_matches(
+                    member,
+                    first_name=first_name,
+                    last_name=last_name,
+                    email=email,
+                    display_name=display_name,
+                    role_slug=role_slug,
+                    is_active=is_active,
+                    is_bot=is_bot,
+                )
+            ]
+
+        return lite_or_fallback(
+            lambda: client.projects.get_members_lite(
+                workspace_slug=workspace_slug,
+                project_id=project_id,
+                params=params,
+            ),
+            get_full_members,
+            ProjectMember,
+            PaginatedProjectMemberResponse,
         )
 
     @mcp.tool()

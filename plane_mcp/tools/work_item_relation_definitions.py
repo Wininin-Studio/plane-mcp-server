@@ -3,6 +3,7 @@
 from typing import Any, get_args
 
 from fastmcp import FastMCP
+from plane.errors.errors import HttpError
 from plane.models.work_item_relation_definitions import (
     CreateWorkItemRelationDefinition,
     PaginatedWorkItemRelationDefinitionResponse,
@@ -12,6 +13,21 @@ from plane.models.work_item_relation_definitions import (
 from plane.models.work_items import DependencyTypeEnum
 
 from plane_mcp.client import get_plane_client_context
+from plane_mcp.compatibility import (
+    PlaneCompatibilityError,
+    compatibility_capabilities,
+    mark_legacy_api,
+    uses_legacy_api,
+)
+
+
+def _legacy_definition_response(client: Any) -> dict[str, Any]:
+    return {
+        "built_in_dependencies": list(get_args(DependencyTypeEnum)),
+        "custom_definitions": [],
+        "legacy_additional_relations": ["duplicate", "relates_to"],
+        "capabilities": compatibility_capabilities(client, probe=False)["capabilities"],
+    }
 
 
 def register_work_item_relation_definition_tools(mcp: FastMCP) -> None:
@@ -39,23 +55,33 @@ def register_work_item_relation_definition_tools(mcp: FastMCP) -> None:
                 outward or inward label.
         """
         client, workspace_slug = get_plane_client_context()
+        if uses_legacy_api(client, probe=True):
+            return _legacy_definition_response(client)
         results: list[WorkItemRelationDefinition] = []
         cursor: str | None = None
-        while True:
-            page: PaginatedWorkItemRelationDefinitionResponse = client.work_item_relation_definitions.list(
-                workspace_slug=workspace_slug,
-                is_default=is_default,
-                is_active=is_active,
-                per_page=100,
-                cursor=cursor,
-            )
-            results.extend(page.results)
-            cursor = page.next_cursor
-            if not page.next_page_results or not cursor:
-                break
+        try:
+            while True:
+                page: PaginatedWorkItemRelationDefinitionResponse = client.work_item_relation_definitions.list(
+                    workspace_slug=workspace_slug,
+                    is_default=is_default,
+                    is_active=is_active,
+                    per_page=100,
+                    cursor=cursor,
+                )
+                results.extend(page.results)
+                cursor = page.next_cursor
+                if not page.next_page_results or not cursor:
+                    break
+        except HttpError as exc:
+            if exc.status_code != 404:
+                raise
+            mark_legacy_api(client)
+            return _legacy_definition_response(client)
         return {
             "built_in_dependencies": list(get_args(DependencyTypeEnum)),
             "custom_definitions": [d.model_dump() for d in results],
+            "legacy_additional_relations": [],
+            "capabilities": compatibility_capabilities(client, probe=False)["capabilities"],
         }
 
     @mcp.tool()
@@ -83,6 +109,8 @@ def register_work_item_relation_definition_tools(mcp: FastMCP) -> None:
             Created WorkItemRelationDefinition object.
         """
         client, workspace_slug = get_plane_client_context()
+        if uses_legacy_api(client, probe=True):
+            raise PlaneCompatibilityError("Plane 1.3.1 does not expose relation definitions through its public API.")
         data = CreateWorkItemRelationDefinition(
             name=name,
             outward=outward,
@@ -118,6 +146,8 @@ def register_work_item_relation_definition_tools(mcp: FastMCP) -> None:
             Updated WorkItemRelationDefinition object.
         """
         client, workspace_slug = get_plane_client_context()
+        if uses_legacy_api(client, probe=True):
+            raise PlaneCompatibilityError("Plane 1.3.1 does not expose relation definitions through its public API.")
         data = UpdateWorkItemRelationDefinition(
             name=name,
             outward=outward,
@@ -141,6 +171,8 @@ def register_work_item_relation_definition_tools(mcp: FastMCP) -> None:
             definition_id: UUID of the relation definition to delete.
         """
         client, workspace_slug = get_plane_client_context()
+        if uses_legacy_api(client, probe=True):
+            raise PlaneCompatibilityError("Plane 1.3.1 does not expose relation definitions through its public API.")
         client.work_item_relation_definitions.delete(
             workspace_slug=workspace_slug,
             definition_id=definition_id,

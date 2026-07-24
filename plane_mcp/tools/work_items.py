@@ -20,9 +20,27 @@ from plane.models.work_items import (
 from pydantic import Field
 
 from plane_mcp.client import get_plane_client_context
+from plane_mcp.compatibility import (
+    PlaneCompatibilityError,
+    ensure_pql_supported,
+    uses_legacy_api,
+)
 from plane_mcp.tools.pql_reference import PQL_FIELD_HINT, PQL_FULL_REFERENCE
+from plane_mcp.work_item_filters import list_work_items_structured
 
 logger = get_logger(__name__)
+
+
+class _CreateWorkItemCompat(CreateWorkItem):
+    """Emit both state field names accepted across Cloud and Plane 1.3.1."""
+
+    state_id: str | None = None
+
+
+class _UpdateWorkItemCompat(UpdateWorkItem):
+    """Emit both state field names accepted across Cloud and Plane 1.3.1."""
+
+    state_id: str | None = None
 
 
 def _dump_results(items: Any, fields: str | None) -> list[Any]:
@@ -71,6 +89,11 @@ def register_work_item_tools(mcp: FastMCP) -> None:
     def list_work_items(
         project_id: str | None = None,
         pql: Annotated[str | None, Field(description=PQL_FIELD_HINT)] = None,
+        assignee_id: str | None = None,
+        state_groups: list[str] | None = None,
+        state_ids: list[str] | None = None,
+        parent_id: str | None = None,
+        work_item_type_id: str | None = None,
         order_by: str | None = None,
         per_page: int | None = None,
         cursor: str | None = None,
@@ -80,10 +103,13 @@ def register_work_item_tools(mcp: FastMCP) -> None:
         external_source: str | None = None,
     ) -> dict[str, Any]:
         """
-        List work items with optional PQL filtering.
+        List work items with optional PQL or reliable structured filtering.
 
         Omit project_id to list across the entire workspace.
         Pass project_id to scope results to a single project.
+        Plane 1.3.1 requires project_id and does not support PQL. On that
+        version, use the structured filters below; the MCP scans all project
+        pages and filters locally so results and totals remain correct.
 
         For UUID fields (assignee, state, label, cycle, module, type,
         milestone) call the relevant list tool first to get the UUID.
@@ -91,6 +117,12 @@ def register_work_item_tools(mcp: FastMCP) -> None:
         Args:
             project_id: UUID of the project. Omit for workspace-wide results.
             pql: PQL filter. See field description for syntax.
+            assignee_id: Exact assignee UUID. Requires project_id.
+            state_groups: Exact state groups (backlog, unstarted, started,
+                completed, cancelled). Requires project_id.
+            state_ids: Exact state UUIDs. Requires project_id.
+            parent_id: Exact parent work-item UUID. Requires project_id.
+            work_item_type_id: Exact work-item type UUID. Requires project_id.
             order_by: Sort field; prefix `-` for descending (e.g. `-created_at`).
             per_page: 1-100, default 25.
             cursor: From previous response's next_cursor.
@@ -111,6 +143,42 @@ def register_work_item_tools(mcp: FastMCP) -> None:
             prev_cursor: Cursor for the previous page.
         """
         client, workspace_slug = get_plane_client_context()
+        if pql:
+            ensure_pql_supported(
+                client,
+                fallback_hint=(
+                    "Use project_id with assignee_id, state_groups, state_ids, parent_id, or work_item_type_id instead."
+                ),
+            )
+        legacy = uses_legacy_api(client, probe=project_id is None)
+        structured = any(
+            value is not None for value in (assignee_id, state_groups, state_ids, parent_id, work_item_type_id)
+        )
+
+        if pql and structured:
+            raise ValueError("Do not combine pql with structured work-item filters.")
+        if legacy and project_id is None:
+            raise ValueError("Plane 1.3.1 has no workspace-wide work-item list; provide project_id.")
+        if structured:
+            if project_id is None:
+                raise ValueError("Structured work-item filters require project_id.")
+            return list_work_items_structured(
+                client,
+                workspace_slug,
+                project_id,
+                assignee_id=assignee_id,
+                state_groups=state_groups,
+                state_ids=state_ids,
+                parent_id=parent_id,
+                work_item_type_id=work_item_type_id,
+                order_by=order_by,
+                per_page=per_page,
+                cursor=cursor,
+                expand=expand,
+                fields=fields,
+                external_id=external_id,
+                external_source=external_source,
+            )
 
         params = WorkItemQueryParams(
             pql=pql,
@@ -187,6 +255,11 @@ def register_work_item_tools(mcp: FastMCP) -> None:
                 ISO dates for target_date/start_date, "None" for unset values.
         """
         client, workspace_slug = get_plane_client_context()
+        if uses_legacy_api(client, probe=True):
+            raise PlaneCompatibilityError(
+                "Plane 1.3.1 has no workspace-wide work-item count API. "
+                "Use project-scoped list_work_items with structured filters and total_count."
+            )
         params = WorkItemCountQueryParams(pql=pql, group_by=group_by, sub_group_by=sub_group_by)
         try:
             response: WorkItemGroupedCountResponse = client.work_items.count_workspace(
@@ -262,7 +335,7 @@ def register_work_item_tools(mcp: FastMCP) -> None:
             priority if priority in get_args(PriorityEnum) else None  # type: ignore[assignment]
         )
 
-        data = CreateWorkItem(
+        data = _CreateWorkItemCompat(
             name=name,
             assignees=assignees,
             labels=labels,
@@ -278,6 +351,7 @@ def register_work_item_tools(mcp: FastMCP) -> None:
             external_id=external_id,
             parent=parent,
             state=state,
+            state_id=state,
             estimate_point=estimate_point,
             type=type,
         )
@@ -445,7 +519,7 @@ def register_work_item_tools(mcp: FastMCP) -> None:
             priority if priority in get_args(PriorityEnum) else None  # type: ignore[assignment]
         )
 
-        data = UpdateWorkItem(
+        data = _UpdateWorkItemCompat(
             name=name,
             assignees=assignees,
             labels=labels,
@@ -461,6 +535,7 @@ def register_work_item_tools(mcp: FastMCP) -> None:
             external_id=external_id,
             parent=parent,
             state=state,
+            state_id=state,
             estimate_point=estimate_point,
             type=type,
         )
@@ -589,6 +664,11 @@ def register_work_item_tools(mcp: FastMCP) -> None:
             Paginated envelope with results, total_count, next_cursor, prev_cursor.
         """
         client, workspace_slug = get_plane_client_context()
+        if pql:
+            ensure_pql_supported(
+                client,
+                fallback_hint="Omit pql when listing archived work items.",
+            )
         params = WorkItemQueryParams(
             pql=pql,
             order_by=order_by,

@@ -2,6 +2,7 @@
 
 from fastmcp import FastMCP
 
+from plane_mcp.tools.compatibility import register_compatibility_tools
 from plane_mcp.tools.customers import register_customer_tools
 from plane_mcp.tools.cycles import register_cycle_tools
 from plane_mcp.tools.initiatives import register_initiative_tools
@@ -31,6 +32,7 @@ from plane_mcp.tools.workspaces import register_workspace_tools
 
 def register_tools(mcp: FastMCP) -> None:
     """Register all tools with the MCP server."""
+    register_compatibility_tools(mcp)
     register_project_tools(mcp)
     register_work_item_tools(mcp)
     register_work_item_activity_tools(mcp)

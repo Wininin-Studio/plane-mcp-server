@@ -129,6 +129,57 @@ export PLANE_WORKSPACE_SLUG="your-workspace-slug"
 
 **Note**: For remote HTTP transports (OAuth or PAT), authentication is handled via the connection method (OAuth flow or PAT headers) and does not require these environment variables.
 
+### Plane 1.3.1 self-hosted compatibility
+
+This fork includes a compatibility profile for Plane Community Edition 1.3.1.
+It keeps the modern SDK for newer servers while falling back to the full
+project/member/cycle/module routes, the legacy work-item relation route, and
+client-side structured work-item filtering where 1.3.1 lacks newer APIs.
+
+Pin the profile for a 1.3.1 instance:
+
+```json
+{
+  "mcpServers": {
+    "plane": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/Wininin-Studio/plane-mcp-server.git@codex/plane-1.3.1-compat",
+        "plane-mcp-server",
+        "stdio"
+      ],
+      "env": {
+        "PLANE_API_KEY": "<your-api-key>",
+        "PLANE_WORKSPACE_SLUG": "<your-workspace-slug>",
+        "PLANE_BASE_URL": "https://your-plane.example",
+        "PLANE_API_COMPAT": "1.3.1"
+      }
+    }
+  }
+}
+```
+
+Call `get_plane_api_capabilities` before capability-sensitive workflows. In
+the 1.3.1 profile:
+
+- `list_projects`, project/workspace members, cycles, and modules fall back
+  from missing `-lite` routes.
+- `list_work_items` requires `project_id`. Use `assignee_id`,
+  `state_groups`, `state_ids`, `parent_id`, and `work_item_type_id`; PQL is
+  rejected because Plane 1.3.1 silently ignores it.
+- Built-in relation reads use `/relations/` and normalize the 1.3.1 response
+  shape. Relation creation is enabled only when the public removal backport
+  described below is configured, so the MCP cannot create an uncleanable
+  dependency.
+- Custom relations, relation definitions, workspace-wide work-item listing,
+  and the public Pages API are unavailable.
+- Plane 1.3.1 has no public relation-removal route. Workflows that require
+  cleanup must not create a relation until the server has a public,
+  relation-type-aware `/relations/remove/` backport. Set
+  `PLANE_RELATION_REMOVE_SUPPORTED=true` only after that server patch is
+  deployed.
+
 ### OAuth redirect URIs
 
 For the OAuth HTTP/SSE transports, the server validates each client's redirect URI against an allowlist. Common MCP clients (Cursor, VS Code, Claude.ai, ChatGPT connectors, localhost) are allowed by default.
