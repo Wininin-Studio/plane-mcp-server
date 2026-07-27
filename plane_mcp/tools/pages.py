@@ -3,10 +3,44 @@
 from typing import Any
 
 from fastmcp import FastMCP
-from plane.models.pages import CreatePage, Page
+from plane import PlaneClient
+from plane.models.pages import CreatePage, Page, UpdatePage
 from plane.models.work_item_pages import CreateWorkItemPage, WorkItemPage
 
 from plane_mcp.client import get_plane_client_context
+
+
+def _update_page(
+    client: PlaneClient,
+    workspace_slug: str,
+    page_id: str,
+    project_id: str | None,
+    data: UpdatePage,
+) -> Page:
+    """Update a page while supporting SDK versions without public update methods."""
+    if project_id is not None:
+        update_project_page = getattr(client.pages, "update_project_page", None)
+        if callable(update_project_page):
+            return update_project_page(
+                workspace_slug=workspace_slug,
+                project_id=project_id,
+                page_id=page_id,
+                data=data,
+            )
+        endpoint = f"{workspace_slug}/projects/{project_id}/pages/{page_id}"
+    else:
+        update_workspace_page = getattr(client.pages, "update_workspace_page", None)
+        if callable(update_workspace_page):
+            return update_workspace_page(
+                workspace_slug=workspace_slug,
+                page_id=page_id,
+                data=data,
+            )
+        endpoint = f"{workspace_slug}/pages/{page_id}"
+
+    # plane-sdk 0.2.20 has UpdatePage but no public update methods.
+    response = client.pages._patch(endpoint, data.model_dump(exclude_none=True))
+    return Page.model_validate(response)
 
 
 def register_page_tools(mcp: FastMCP) -> None:
@@ -199,3 +233,53 @@ def register_page_tools(mcp: FastMCP) -> None:
             workspace_slug=workspace_slug,
             data=data,
         )
+
+    @mcp.tool()
+    def update_page(
+        page_id: str,
+        project_id: str | None = None,
+        name: str | None = None,
+        description_html: str | None = None,
+        access: int | None = None,
+        color: str | None = None,
+        archived_at: str | None = None,
+        view_props: dict[str, Any] | None = None,
+        logo_props: dict[str, Any] | None = None,
+        external_id: str | None = None,
+        external_source: str | None = None,
+    ) -> Page:
+        """
+        Update an existing page.
+
+        Updates a project page if project_id is given, otherwise a
+        workspace-level page. Only provided fields are changed.
+
+        Args:
+            page_id: UUID of the page
+            project_id: UUID of the project. Omit for a workspace page.
+            name: Updated page name
+            description_html: Updated page content in HTML format
+            access: Updated access level for the page (integer)
+            color: Updated page color
+            archived_at: Archive timestamp (ISO 8601 format)
+            view_props: Updated view properties dictionary
+            logo_props: Updated logo properties dictionary
+            external_id: Updated external system identifier
+            external_source: Updated external system source name
+
+        Returns:
+            Updated Page object
+        """
+        client, workspace_slug = get_plane_client_context()
+        data = UpdatePage(
+            name=name,
+            description_html=description_html,
+            access=access,
+            color=color,
+            archived_at=archived_at,
+            view_props=view_props,
+            logo_props=logo_props,
+            external_id=external_id,
+            external_source=external_source,
+        )
+        return _update_page(client, workspace_slug, page_id, project_id, data)
