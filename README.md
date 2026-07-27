@@ -153,7 +153,9 @@ Pin the profile for a 1.3.1 instance:
         "PLANE_API_KEY": "<your-api-key>",
         "PLANE_WORKSPACE_SLUG": "<your-workspace-slug>",
         "PLANE_BASE_URL": "https://your-plane.example",
-        "PLANE_API_COMPAT": "1.3.1"
+        "PLANE_API_COMPAT": "1.3.1",
+        "PLANE_RELATION_REMOVE_SUPPORTED": "true",
+        "PLANE_PAGES_API_SUPPORTED": "true"
       }
     }
   }
@@ -172,13 +174,17 @@ the 1.3.1 profile:
   shape. Relation creation is enabled only when the public removal backport
   described below is configured, so the MCP cannot create an uncleanable
   dependency.
-- Custom relations, relation definitions, workspace-wide work-item listing,
-  and the public Pages API are unavailable.
+- Custom relations, relation definitions, and workspace-wide work-item listing
+  are unavailable. The public Pages API is enabled only when the server has
+  the Pages backport and `PLANE_PAGES_API_SUPPORTED=true` is configured.
 - Plane 1.3.1 has no public relation-removal route. Workflows that require
   cleanup must not create a relation until the server has a public,
   relation-type-aware `/relations/remove/` backport. Set
   `PLANE_RELATION_REMOVE_SUPPORTED=true` only after that server patch is
   deployed.
+- Plane 1.3.1 has no public Pages routes. Set
+  `PLANE_PAGES_API_SUPPORTED=true` only after the server's public Pages
+  backport is deployed.
 
 ### OAuth redirect URIs
 
@@ -472,4 +478,3 @@ If you were using the previous Node.js-based `@makeplane/plane-mcp-server`, your
 ```
 
 **Please migrate to the new Python-based configuration shown in the Usage section above.**
-

@@ -11,6 +11,7 @@ PLANE_1_3_1_PROFILE = "1.3.1"
 LEGACY_API_PROFILE = "legacy"
 _PROFILE_ENV = "PLANE_API_COMPAT"
 _RELATION_REMOVE_ENV = "PLANE_RELATION_REMOVE_SUPPORTED"
+_PAGES_API_ENV = "PLANE_PAGES_API_SUPPORTED"
 _INSTANCE_CACHE: dict[str, dict[str, Any]] = {}
 _LEGACY_BASE_PATHS: set[str] = set()
 
@@ -37,6 +38,11 @@ def configured_profile() -> str:
 def relation_remove_supported() -> bool:
     """Whether a self-hosted server has the optional public remove backport."""
     return os.getenv(_RELATION_REMOVE_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def pages_api_supported() -> bool:
+    """Whether a self-hosted server has the optional public Pages backport."""
+    return os.getenv(_PAGES_API_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _api_base_path(client: PlaneClient) -> str:
@@ -195,6 +201,7 @@ def compatibility_capabilities(client: PlaneClient, *, probe: bool = True) -> di
     legacy = resolved["profile"] in {PLANE_1_3_1_PROFILE, LEGACY_API_PROFILE}
     unknown = resolved["profile"] == "auto"
     relation_remove = relation_remove_supported() if legacy else None if unknown else True
+    pages_api = pages_api_supported() if legacy else None if unknown else True
     capabilities: dict[str, bool | None] = {
         "project_and_member_fallbacks": True,
         "project_scoped_work_items": True,
@@ -206,7 +213,7 @@ def compatibility_capabilities(client: PlaneClient, *, probe: bool = True) -> di
         "built_in_relation_remove": relation_remove,
         "custom_relations": False if legacy else None if unknown else True,
         "relation_definitions": False if legacy else None if unknown else True,
-        "pages_public_api": False if legacy else None,
+        "pages_public_api": pages_api,
     }
     return {
         "configured_profile": configured_profile(),
